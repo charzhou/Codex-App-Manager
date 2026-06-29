@@ -70,10 +70,10 @@ pub struct CodexCliPresetApplyResult {
     pub warning: Option<String>,
 }
 
-fn codex_home_from_env() -> Option<PathBuf> {
-    std::env::var_os("CODEX_HOME")
-        .map(PathBuf::from)
-        .or_else(paths::codex_home_dir)
+#[derive(Debug)]
+pub struct CodexCliPresetApplyFailure {
+    pub error: AppError,
+    pub logs: Vec<CodexConfigLogStep>,
 }
 
 fn config_path_for_home(home: &Path) -> PathBuf {
@@ -210,6 +210,19 @@ fn push_log(
     });
 }
 
+fn apply_failure(
+    logs: &mut Vec<CodexConfigLogStep>,
+    step: &str,
+    message: &str,
+    error: AppError,
+) -> CodexCliPresetApplyFailure {
+    push_log(logs, step, message, "failure", Some(error.to_string()));
+    CodexCliPresetApplyFailure {
+        error,
+        logs: std::mem::take(logs),
+    }
+}
+
 pub fn preview_for_home(home: &Path) -> Result<CodexCliPresetPreview, AppError> {
     Ok(CodexCliPresetPreview {
         codex_home_path: home.display().to_string(),
@@ -223,15 +236,26 @@ pub fn preview_for_home(home: &Path) -> Result<CodexCliPresetPreview, AppError> 
 }
 
 pub fn preview() -> Result<CodexCliPresetPreview, AppError> {
-    let home = codex_home_from_env()
+    let home = paths::codex_home_dir()
         .ok_or_else(|| AppError::Internal("Unable to resolve CODEX_HOME".to_string()))?;
     preview_for_home(&home)
 }
 
-pub fn apply_for_home(home: &Path, api_key: &str) -> Result<CodexCliPresetApplyResult, AppError> {
+fn apply_for_home_with_logs(
+    home: &Path,
+    api_key: &str,
+) -> Result<CodexCliPresetApplyResult, CodexCliPresetApplyFailure> {
     let trimmed = api_key.trim();
     if trimmed.is_empty() {
-        return Err(AppError::Internal("API key is required".to_string()));
+        return Err(CodexCliPresetApplyFailure {
+            error: AppError::Internal("API key is required".to_string()),
+            logs: vec![CodexConfigLogStep {
+                step: "validate_api_key".to_string(),
+                message: "API key is required.".to_string(),
+                status: "failure".to_string(),
+                detail: Some("API key is required".to_string()),
+            }],
+        });
     }
 
     let mut logs = Vec::new();
@@ -247,9 +271,16 @@ pub fn apply_for_home(home: &Path, api_key: &str) -> Result<CodexCliPresetApplyR
         "success",
         Some(home.display().to_string()),
     );
-    fs::create_dir_all(home).map_err(|e| AppError::Internal(format!("create CODEX_HOME: {e}")))?;
-    fs::create_dir_all(&backup_dir)
-        .map_err(|e| AppError::Internal(format!("create backups dir: {e}")))?;
+    fs::create_dir_all(home)
+        .map_err(|e| apply_failure(&mut logs, "ensure_codex_home", "Failed to create CODEX_HOME.", AppError::Internal(format!("create CODEX_HOME: {e}"))))?;
+    fs::create_dir_all(&backup_dir).map_err(|e| {
+        apply_failure(
+            &mut logs,
+            "ensure_backups_dir",
+            "Failed to create backups directory.",
+            AppError::Internal(format!("create backups dir: {e}")),
+        )
+    })?;
     push_log(
         &mut logs,
         "ensure_directories",
@@ -258,7 +289,14 @@ pub fn apply_for_home(home: &Path, api_key: &str) -> Result<CodexCliPresetApplyR
         None,
     );
 
-    if let Some(backup) = copy_backup_if_exists(&config_path, &backup_dir)? {
+    if let Some(backup) = copy_backup_if_exists(&config_path, &backup_dir).map_err(|error| {
+        apply_failure(
+            &mut logs,
+            "backup_config_toml",
+            "Failed to create config.toml backup.",
+            error,
+        )
+    })? {
         push_log(
             &mut logs,
             "backup_config_toml",
@@ -268,7 +306,14 @@ pub fn apply_for_home(home: &Path, api_key: &str) -> Result<CodexCliPresetApplyR
         );
         backups.push(backup);
     }
-    if let Some(backup) = copy_backup_if_exists(&auth_path, &backup_dir)? {
+    if let Some(backup) = copy_backup_if_exists(&auth_path, &backup_dir).map_err(|error| {
+        apply_failure(
+            &mut logs,
+            "backup_auth_json",
+            "Failed to create auth.json backup.",
+            error,
+        )
+    })? {
         push_log(
             &mut logs,
             "backup_auth_json",
@@ -279,7 +324,14 @@ pub fn apply_for_home(home: &Path, api_key: &str) -> Result<CodexCliPresetApplyR
         backups.push(backup);
     }
 
-    let mut doc = parse_or_empty_config(&config_path)?;
+    let mut doc = parse_or_empty_config(&config_path).map_err(|error| {
+        apply_failure(
+            &mut logs,
+            "parse_config_toml",
+            "Failed to parse config.toml.",
+            error,
+        )
+    })?;
     push_log(
         &mut logs,
         "parse_config_toml",
@@ -296,7 +348,14 @@ pub fn apply_for_home(home: &Path, api_key: &str) -> Result<CodexCliPresetApplyR
         None,
     );
 
-    write_atomic_bytes(&config_path, doc.to_string().as_bytes())?;
+    write_atomic_bytes(&config_path, doc.to_string().as_bytes()).map_err(|error| {
+        apply_failure(
+            &mut logs,
+            "write_config_toml",
+            "Failed to write config.toml.",
+            error,
+        )
+    })?;
     push_log(
         &mut logs,
         "write_config_toml",
@@ -305,7 +364,14 @@ pub fn apply_for_home(home: &Path, api_key: &str) -> Result<CodexCliPresetApplyR
         Some(config_path.display().to_string()),
     );
 
-    let auth_json = render_auth_json(trimmed)?;
+    let auth_json = render_auth_json(trimmed).map_err(|error| {
+        apply_failure(
+            &mut logs,
+            "render_auth_json",
+            "Failed to render auth.json.",
+            error,
+        )
+    })?;
     push_log(
         &mut logs,
         "render_auth_json",
@@ -313,7 +379,14 @@ pub fn apply_for_home(home: &Path, api_key: &str) -> Result<CodexCliPresetApplyR
         "success",
         None,
     );
-    write_atomic_bytes(&auth_path, auth_json.as_bytes())?;
+    write_atomic_bytes(&auth_path, auth_json.as_bytes()).map_err(|error| {
+        apply_failure(
+            &mut logs,
+            "write_auth_json",
+            "Failed to write auth.json.",
+            error,
+        )
+    })?;
     push_log(
         &mut logs,
         "write_auth_json",
@@ -340,10 +413,27 @@ pub fn apply_for_home(home: &Path, api_key: &str) -> Result<CodexCliPresetApplyR
     })
 }
 
+pub fn apply_for_home(home: &Path, api_key: &str) -> Result<CodexCliPresetApplyResult, AppError> {
+    apply_for_home_with_logs(home, api_key).map_err(|failure| failure.error)
+}
+
 pub fn apply(api_key: &str) -> Result<CodexCliPresetApplyResult, AppError> {
-    let home = codex_home_from_env()
+    let home = paths::codex_home_dir()
         .ok_or_else(|| AppError::Internal("Unable to resolve CODEX_HOME".to_string()))?;
     apply_for_home(&home, api_key)
+}
+
+pub fn apply_with_logs(api_key: &str) -> Result<CodexCliPresetApplyResult, CodexCliPresetApplyFailure> {
+    let home = paths::codex_home_dir().ok_or_else(|| CodexCliPresetApplyFailure {
+        error: AppError::Internal("Unable to resolve CODEX_HOME".to_string()),
+        logs: vec![CodexConfigLogStep {
+            step: "resolve_codex_home".to_string(),
+            message: "Unable to resolve CODEX_HOME.".to_string(),
+            status: "failure".to_string(),
+            detail: Some("Unable to resolve CODEX_HOME".to_string()),
+        }],
+    })?;
+    apply_for_home_with_logs(&home, api_key)
 }
 
 #[cfg(test)]
@@ -446,4 +536,14 @@ hooks = true
         let err = apply_for_home(&home, "   ").expect_err("empty key should fail");
         assert!(err.to_string().contains("API key"));
     }
+
+    #[test]
+    fn apply_with_logs_returns_failure_steps_for_invalid_api_key() {
+        let err = apply_with_logs("   ").expect_err("empty key should fail");
+        assert!(err.error.to_string().contains("API key"));
+        assert_eq!(err.logs.len(), 1);
+        assert_eq!(err.logs[0].step, "validate_api_key");
+        assert_eq!(err.logs[0].status, "failure");
+    }
+
 }

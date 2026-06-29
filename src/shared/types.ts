@@ -17,6 +17,8 @@ export interface CommandError {
   code: string;
   /** Human-facing message (the `Display` of the underlying `AppError`). */
   message: string;
+  /** Optional structured backend steps for partial progress / failure diagnosis. */
+  logs?: CodexConfigLogStep[] | null;
 }
 
 export interface InstalledCodex {

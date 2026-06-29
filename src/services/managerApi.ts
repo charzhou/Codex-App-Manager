@@ -180,6 +180,13 @@ export function errorCode(cause: unknown): string | null {
   return null;
 }
 
+export function errorLogs(cause: unknown): CommandError["logs"] {
+  if (isCommandError(cause) && Array.isArray(cause.logs)) {
+    return cause.logs;
+  }
+  return null;
+}
+
 export function isDownloadCancelled(cause: unknown): boolean {
   return errorMessage(cause).toLowerCase().includes("download cancelled");
 }

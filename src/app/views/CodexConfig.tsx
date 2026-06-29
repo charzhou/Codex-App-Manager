@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { errorMessage, managerApi } from "../../services/managerApi";
-import type { CodexCliPresetApplyResult, CodexCliPresetPreview } from "../../shared/types";
+import { errorLogs, errorMessage, managerApi } from "../../services/managerApi";
+import type {
+  CodexCliPresetApplyResult,
+  CodexCliPresetPreview,
+  CodexConfigLogStep,
+} from "../../shared/types";
 import { Icon } from "../icons";
 import { useI18n } from "../i18n";
 import { NavBar, Ring } from "../components";
@@ -22,6 +26,7 @@ export function CodexConfig({ onBack }: { onBack: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CodexCliPresetApplyResult | null>(null);
+  const [logs, setLogs] = useState<CodexConfigLogStep[]>([]);
 
   useEffect(() => {
     void managerApi
@@ -40,12 +45,15 @@ export function CodexConfig({ onBack }: { onBack: () => void }) {
     setBusy(true);
     setError(null);
     setResult(null);
+    setLogs([]);
     try {
       const next = await managerApi.applyCodexCliPreset(apiKey);
       setResult(next);
+      setLogs(next.logs);
       setLogOpen(true);
     } catch (cause) {
       setError(errorMessage(cause));
+      setLogs(errorLogs(cause) ?? []);
       setLogOpen(true);
     } finally {
       setBusy(false);
@@ -200,12 +208,12 @@ export function CodexConfig({ onBack }: { onBack: () => void }) {
           </button>
           {logOpen ? (
             <div className="list">
-              {(result?.logs ?? []).length === 0 ? (
+              {logs.length === 0 ? (
                 <div className="row">
                   <span className="rsub">{t("config.noLogsYet")}</span>
                 </div>
               ) : (
-                result!.logs.map((entry, index) => (
+                logs.map((entry, index) => (
                   <div className="row" key={`${entry.step}-${index}`}>
                     <span className="rtext">
                       <span className="rtitle">{entry.message}</span>

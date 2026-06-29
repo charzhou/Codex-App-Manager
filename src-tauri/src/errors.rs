@@ -1,6 +1,7 @@
 use serde::Serialize;
 use thiserror::Error;
 
+use crate::app::codex_cli_config::CodexConfigLogStep;
 use crate::app::oplock::OperationError;
 
 #[derive(Debug, Error)]
@@ -199,6 +200,18 @@ impl From<OperationError> for AppError {
 pub struct CommandError {
     pub code: String,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub logs: Option<Vec<CodexConfigLogStep>>,
+}
+
+impl CommandError {
+    pub fn with_logs(error: AppError, logs: Vec<CodexConfigLogStep>) -> Self {
+        Self {
+            code: error.code().to_string(),
+            message: error.to_string(),
+            logs: Some(logs),
+        }
+    }
 }
 
 impl From<AppError> for CommandError {
@@ -206,6 +219,7 @@ impl From<AppError> for CommandError {
         Self {
             code: value.code().to_string(),
             message: value.to_string(),
+            logs: None,
         }
     }
 }

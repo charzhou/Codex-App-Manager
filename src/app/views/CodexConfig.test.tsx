@@ -19,7 +19,20 @@ vi.mock("../../services/managerApi", () => ({
     applyCodexCliPreset,
     openCodexHome,
   },
-  errorMessage: (cause: unknown) => (cause instanceof Error ? cause.message : String(cause)),
+  errorMessage: (cause: unknown) => {
+    if (cause instanceof Error) return cause.message;
+    if (cause && typeof cause === "object" && "message" in cause) {
+      return String((cause as { message?: unknown }).message ?? "");
+    }
+    return String(cause);
+  },
+  errorLogs: (cause: unknown) => {
+    if (cause && typeof cause === "object" && "logs" in cause) {
+      const logs = (cause as { logs?: unknown }).logs;
+      return Array.isArray(logs) ? logs : [];
+    }
+    return [];
+  },
 }));
 
 vi.mock("../i18n", () => ({
@@ -105,7 +118,18 @@ describe("CodexConfig", () => {
   });
 
   it("shows failure when apply rejects", async () => {
-    applyCodexCliPreset.mockRejectedValue(new Error("write auth.json failed"));
+    applyCodexCliPreset.mockRejectedValue({
+      code: "internal_error",
+      message: "write auth.json failed",
+      logs: [
+        {
+          step: "write_auth_json",
+          message: "Failed to write auth.json.",
+          status: "failure",
+          detail: "replace target file: Permission denied",
+        },
+      ],
+    });
 
     render(<CodexConfig onBack={() => undefined} />);
     const input = await screen.findByPlaceholderText("config.apiKeyPlaceholder");
@@ -113,5 +137,9 @@ describe("CodexConfig", () => {
     fireEvent.click(screen.getByRole("button", { name: "config.apply" }));
 
     expect(await screen.findByText("write auth.json failed")).toBeInTheDocument();
+    expect(await screen.findByText("Failed to write auth.json.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("[failure] write_auth_json · replace target file: Permission denied"),
+    ).toBeInTheDocument();
   });
 });
