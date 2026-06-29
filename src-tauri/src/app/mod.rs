@@ -1,4 +1,5 @@
 pub mod atomic_file;
+pub mod codex_cli_config;
 pub mod codex_self_update;
 pub mod config_health;
 pub mod diagnostics;

@@ -42,7 +42,13 @@ type DownloadStopIntent = "pause" | "cancel";
 
 // Windows counterpart of MacHome — same design system + state machine, driven by
 // the win_* backend (codex-win-engine): MSIX sideload or portable fallback.
-export function WinHome({ onOpenSettings }: { onOpenSettings: () => void }) {
+export function WinHome({
+  onOpenSettings,
+  onOpenConfig,
+}: {
+  onOpenSettings: () => void;
+  onOpenConfig: () => void;
+}) {
   const { t, lang } = useI18n();
   const [report, setReport] = useState<WinUpdateReport | null>(null);
   const [status, setStatus] = useState<WinInstallStatus | null>(null);
@@ -916,6 +922,15 @@ export function WinHome({ onOpenSettings }: { onOpenSettings: () => void }) {
             )
           ) : null}
         </div>
+
+        {!rechecking && installed ? (
+          <div className="manual-existing-entry">
+            <button className="linkbtn subtle" onClick={onOpenConfig} disabled={busy !== null}>
+              <Icon name="sliders" />
+              {t("nav.config")}
+            </button>
+          </div>
+        ) : null}
 
         {!rechecking && kind === "none" ? (
           <div className="manual-existing-entry">

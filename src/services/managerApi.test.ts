@@ -170,3 +170,63 @@ describe("diagnostics API", () => {
     });
   });
 });
+
+describe("codex cli config API", () => {
+  it("returns browser preview fallback without invoking Tauri", async () => {
+    const preview = await managerApi.getCodexCliPresetPreview();
+
+    expect(preview.configTomlPath).toContain(".codex/config.toml");
+    expect(preview.authJsonPath).toContain(".codex/auth.json");
+    expect(preview.configSnippet).toContain('model_provider = "OpenAI"');
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects empty API keys before invoking Tauri", async () => {
+    await expect(managerApi.applyCodexCliPreset("   ")).rejects.toThrow("API key is required");
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it("invokes preview and apply commands inside Tauri", async () => {
+    window.__TAURI_INTERNALS__ = {};
+    const preview = {
+      codexHomePath: "/Users/demo/.codex",
+      configTomlPath: "/Users/demo/.codex/config.toml",
+      authJsonPath: "/Users/demo/.codex/auth.json",
+      backupDirPath: "/Users/demo/.codex/backups",
+      configSnippet: 'model_provider = "OpenAI"',
+      authJsonPreview: '{\n  "OPENAI_API_KEY": "sk-***"\n}',
+      warning: "warning",
+    };
+    const result = {
+      codexHomePath: "/Users/demo/.codex",
+      configTomlPath: "/Users/demo/.codex/config.toml",
+      authJsonPath: "/Users/demo/.codex/auth.json",
+      backupDirPath: "/Users/demo/.codex/backups",
+      backups: [
+        {
+          targetPath: "/Users/demo/.codex/config.toml",
+          backupPath: "/Users/demo/.codex/backups/config.toml.20260629-190000.bak",
+        },
+      ],
+      logs: [
+        {
+          step: "done",
+          message: "Applied Codex CLI preset.",
+          status: "success",
+          detail: null,
+        },
+      ],
+      warning: null,
+    };
+
+    invokeMock.mockResolvedValueOnce(preview).mockResolvedValueOnce(result);
+
+    await expect(managerApi.getCodexCliPresetPreview()).resolves.toEqual(preview);
+    await expect(managerApi.applyCodexCliPreset("sk-test")).resolves.toEqual(result);
+
+    expect(invokeMock).toHaveBeenNthCalledWith(1, "preview_codex_cli_preset");
+    expect(invokeMock).toHaveBeenNthCalledWith(2, "apply_codex_cli_preset", {
+      apiKey: "sk-test",
+    });
+  });
+});

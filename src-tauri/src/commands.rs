@@ -8,6 +8,10 @@ use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_updater::UpdaterExt;
 
 use crate::app::atomic_file;
+use crate::app::codex_cli_config::{
+    apply_with_logs as apply_codex_cli_preset_with_logs,
+    preview as preview_codex_cli_preset_inner, CodexCliPresetApplyResult, CodexCliPresetPreview,
+};
 use crate::app::config_health::ConfigHealth;
 use crate::app::diagnostics::Diagnostics;
 use crate::app::disk::available_space;
@@ -855,6 +859,17 @@ pub fn get_config_health(state: State<'_, ManagerState>) -> ConfigHealth {
         .lock()
         .unwrap_or_else(|poison| poison.into_inner())
         .clone()
+}
+
+#[tauri::command]
+pub fn preview_codex_cli_preset() -> Result<CodexCliPresetPreview, CommandError> {
+    preview_codex_cli_preset_inner().map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn apply_codex_cli_preset(api_key: String) -> Result<CodexCliPresetApplyResult, CommandError> {
+    apply_codex_cli_preset_with_logs(&api_key)
+        .map_err(|failure| CommandError::with_logs(failure.error, failure.logs))
 }
 
 #[tauri::command]

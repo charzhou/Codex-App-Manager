@@ -17,6 +17,8 @@ export interface CommandError {
   code: string;
   /** Human-facing message (the `Display` of the underlying `AppError`). */
   message: string;
+  /** Optional structured backend steps for partial progress / failure diagnosis. */
+  logs?: CodexConfigLogStep[] | null;
 }
 
 export interface InstalledCodex {
@@ -160,6 +162,40 @@ export interface Diagnostics {
   recentErrors: string[];
   logTail: string;
   generatedAtUnix: number;
+}
+
+export type CodexConfigLogStatus = "pending" | "running" | "success" | "failure";
+
+export interface CodexConfigLogStep {
+  step: string;
+  message: string;
+  status: CodexConfigLogStatus;
+  detail: string | null;
+}
+
+export interface CodexConfigBackupInfo {
+  targetPath: string;
+  backupPath: string;
+}
+
+export interface CodexCliPresetPreview {
+  codexHomePath: string;
+  configTomlPath: string;
+  authJsonPath: string;
+  backupDirPath: string;
+  configSnippet: string;
+  authJsonPreview: string;
+  warning: string;
+}
+
+export interface CodexCliPresetApplyResult {
+  codexHomePath: string;
+  configTomlPath: string;
+  authJsonPath: string;
+  backupDirPath: string;
+  backups: CodexConfigBackupInfo[];
+  logs: CodexConfigLogStep[];
+  warning: string | null;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {

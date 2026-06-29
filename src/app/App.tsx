@@ -27,7 +27,10 @@ function Shell() {
   return (
     <>
       <div style={{ display: view === "home" ? "contents" : "none" }}>
-        <Home onOpenSettings={() => setView("settings")} />
+        <Home
+          onOpenSettings={() => setView("settings")}
+          onOpenConfig={() => setView("config")}
+        />
       </div>
       {view === "settings" ? (
         <Settings

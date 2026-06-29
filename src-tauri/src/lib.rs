@@ -128,6 +128,8 @@ pub fn run() {
             commands::get_settings,
             commands::set_settings,
             commands::get_config_health,
+            commands::preview_codex_cli_preset,
+            commands::apply_codex_cli_preset,
             commands::restore_config_backup,
             commands::reset_config,
             commands::begin_operation,
