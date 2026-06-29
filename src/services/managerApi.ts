@@ -4,6 +4,8 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import type {
   AppSettings,
   CommandError,
+  CodexCliPresetApplyResult,
+  CodexCliPresetPreview,
   CodexUpdatePlatform,
   Diagnostics,
   MacInstallStatus,
@@ -568,6 +570,64 @@ export const managerApi = {
       return Promise.resolve();
     }
     return invoke<void>("open_codex_home");
+  },
+  getCodexCliPresetPreview(): Promise<CodexCliPresetPreview> {
+    if (!hasTauriRuntime()) {
+      return Promise.resolve({
+        codexHomePath: "~/.codex",
+        configTomlPath: "~/.codex/config.toml",
+        authJsonPath: "~/.codex/auth.json",
+        backupDirPath: "~/.codex/backups",
+        configSnippet: [
+          'model_provider = "OpenAI"',
+          'model = "gpt-5.5"',
+          'review_model = "gpt-5.5"',
+          'model_reasoning_effort = "xhigh"',
+          "disable_response_storage = true",
+          'network_access = "enabled"',
+          "windows_wsl_setup_acknowledged = true",
+          "",
+          "[model_providers.OpenAI]",
+          'name = "OpenAI"',
+          'base_url = "https://sub2api.tegical.com"',
+          'wire_api = "responses"',
+          "requires_openai_auth = true",
+          "",
+          "[features]",
+          "goals = true",
+        ].join("\n"),
+        authJsonPreview: JSON.stringify({ OPENAI_API_KEY: "sk-***" }, null, 2),
+        warning:
+          'This preset does not force cli_auth_credentials_store = "file"; environments pinned to keyring auth may ignore auth.json.',
+      });
+    }
+    return invoke<CodexCliPresetPreview>("preview_codex_cli_preset");
+  },
+  applyCodexCliPreset(apiKey: string): Promise<CodexCliPresetApplyResult> {
+    const trimmed = apiKey.trim();
+    if (!trimmed) {
+      return Promise.reject(new Error("API key is required"));
+    }
+    if (!hasTauriRuntime()) {
+      return Promise.resolve({
+        codexHomePath: "~/.codex",
+        configTomlPath: "~/.codex/config.toml",
+        authJsonPath: "~/.codex/auth.json",
+        backupDirPath: "~/.codex/backups",
+        backups: [],
+        logs: [
+          {
+            step: "done",
+            message: "Browser preview mode did not write files.",
+            status: "success",
+            detail: null,
+          },
+        ],
+        warning:
+          'This preset does not force cli_auth_credentials_store = "file"; environments pinned to keyring auth may ignore auth.json.',
+      });
+    }
+    return invoke<CodexCliPresetApplyResult>("apply_codex_cli_preset", { apiKey: trimmed });
   },
   reportFrontendError(payload: FrontendErrorPayload): Promise<void> {
     if (!hasTauriRuntime()) {
