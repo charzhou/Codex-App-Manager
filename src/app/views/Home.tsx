@@ -37,11 +37,17 @@ type Kind = "loading" | "error" | "none" | "idle" | "update" | "external" | "upt
 type DownloadStopIntent = "pause" | "cancel";
 
 /** Platform dispatcher — the backend command surface differs per OS. */
-export function Home(props: { onOpenSettings: () => void }) {
+export function Home(props: { onOpenSettings: () => void; onOpenConfig: () => void }) {
   return currentPlatform() === "windows" ? <WinHome {...props} /> : <MacHome {...props} />;
 }
 
-function MacHome({ onOpenSettings }: { onOpenSettings: () => void }) {
+function MacHome({
+  onOpenSettings,
+  onOpenConfig,
+}: {
+  onOpenSettings: () => void;
+  onOpenConfig: () => void;
+}) {
   const { t, lang } = useI18n();
   const [report, setReport] = useState<MacUpdateReport | null>(null);
   const [status, setStatus] = useState<MacInstallStatus | null>(null);
@@ -975,6 +981,15 @@ function MacHome({ onOpenSettings }: { onOpenSettings: () => void }) {
             )
           ) : null}
         </div>
+
+        {!rechecking && installed ? (
+          <div className="manual-existing-entry">
+            <button className="linkbtn subtle" onClick={onOpenConfig} disabled={busy !== null}>
+              <Icon name="sliders" />
+              {t("nav.config")}
+            </button>
+          </div>
+        ) : null}
 
         {!rechecking && kind === "none" ? (
           <div className="manual-existing-entry">
